@@ -19,7 +19,7 @@ export async function startTranscription(targetLanguage) {
 
   const transcriber = client.streaming.transcriber({
     sampleRate: 16000,
-    speechModel: "universal-streaming-english",
+    speechModel: "u3-rt-pro",
     format_turns: false,
     end_of_turn_confidence_threshold: 0.4,
     min_end_of_turn_silence_when_confident: 400,

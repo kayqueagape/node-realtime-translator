@@ -1,103 +1,103 @@
-Real-Time Audio Transcription (Node.js + AssemblyAI + FFmpeg)
-This project performs real-time audio transcription by capturing Windows Stereo Mix audio and streaming it to the AssemblyAI API.
+# Real-Time Audio Transcription & Translation
 
+A high-performance Node.js engine that captures Windows system audio via FFmpeg, streams it to AssemblyAI for real-time transcription, and displays translated captions as an overlay — with no perceptible delay.
 
-A high-performance Node.js engine that captures Windows system audio via FFmpeg and pipes raw PCM buffers to AssemblyAI for instantaneous multilingual transcription and translation.
+---
 
+## How It Works
 
-## Process Architecture
-The system works through a three-stage pipeline:
+The system runs a three-stage pipeline:
 
-Capture (FFmpeg): We use Windows' native `dshow` driver to read the sound hardware.
+**1. Capture (FFmpeg)** — Uses Windows' native `dshow` driver to read directly from the sound card (Stereo Mix). Audio is converted to 16-bit PCM at 16,000 Hz and piped as raw bytes.
 
-Streaming (Node.js pipe): Audio is converted to RAW format (16-bit PCM) and sent to the server in chunks via WebSocket.
+**2. Stream (Node.js)** — A child process runs FFmpeg in parallel without blocking the main thread. An `isReady` flag ensures audio is only sent after the WebSocket handshake with AssemblyAI completes.
 
-Processing (AssemblyAI): The AI processes the buffer, detects the language, and returns the final transcription.
+**3. Transcribe & Translate (AssemblyAI + DeepL)** — AssemblyAI processes the audio buffer in real time. On `end_of_turn`, the completed sentence is sent to DeepL and the translation is rendered on the overlay.
 
-## System Components
-1. FFmpeg (The Capturer)
-We replaced old libraries (`node-record-lpcm16`) with Node.js' native `spawn` calling FFmpeg.
+---
 
-Why? FFmpeg allows selecting the input device by its exact name (for example: `audio=Stereo Mix ...`), avoiding common Windows failures when setting default devices.
+## Prerequisites
 
-Configuration: We use 16000 Hz (the AI's standard sample rate) and `s16le` (signed 16-bit PCM).
+### Windows Dependencies
 
-2. Node.js (The Orchestrator)
-The script manages the connection lifecycle:
+| Tool | Purpose | Download |
+|------|---------|----------|
+| **Visual Studio Build Tools** | C++ compiler for native modules | [visualstudio.microsoft.com](https://visualstudio.microsoft.com/visual-cpp-build-tools/) |
+| **CMake** | Build system (add to PATH during install) | [cmake.org](https://cmake.org/download/) |
+| **Python** | Required by some Node.js native deps | [python.org](https://python.org) |
+| **FFmpeg** | Audio capture | [ffmpeg.org](https://ffmpeg.org/download.html) |
 
-isReady (control flag): Fixes the "Socket is not open" error, ensuring no audio is sent before the API handshake completes.
+> When installing Visual Studio Build Tools, select **"Desktop development with C++"**.
 
-spawn: Creates a child process that runs in parallel with Node, delivering high performance byte reads without blocking the main thread.
+---
 
-3. AssemblyAI (The Engine)
-We use the official SDK streaming module. The event architecture makes the system asynchronous:
+## Installation
 
-on("open"): Ensures a secure connection.
+```bash
+npm install
+```
 
-on("turn"): Returns transcribed text as soon as the AI finishes processing an utterance.
+Create a `.env` file at the root:
 
-🚀 How to Run
-Installation:
+```env
+ASSEMBLYAI_API_KEY=your_key_here
+DEEPL_API_KEY=your_key_here
+FFMPEG_AUDIO_DEVICE=audio=Stereo Mix (Realtek High Definition Audio)
+```
 
-Bash
-npm install assemblyai
-Device verification:
-If you switch computers, run the command below to list the exact input name:
+---
 
-Bash
+## Finding Your Audio Device Name
+
+If you switch computers or the device name changes, run:
+
+```bash
 ffmpeg -list_devices true -f dshow -i dummy
-Run:
+```
 
-Bash
+Copy the exact name shown and paste it into `FFMPEG_AUDIO_DEVICE` in your `.env`.
+
+Also make sure **Stereo Mix is enabled** in Windows:
+
+> Control Panel → Sound → Recording → Right-click → Show Disabled Devices → Enable Stereo Mix
+
+---
+
+## Running
+
+```bash
 node main.js
-⚠️ Common Troubleshooting
-"Socket is not open": Check that AssemblyAI's `open` event fires before FFmpeg sends audio data.
+```
 
-No transcription: Check Windows Volume Mixer to ensure Stereo Mix is enabled and volume is above ~50%.
+---
 
-Error 410: Your API key expired or was invalidated. Generate a new key in the AssemblyAI dashboard.
+## Troubleshooting
 
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Socket is not open` | Audio sent before WebSocket opened | Check that the `open` event fires before FFmpeg streams data |
+| No transcription output | Stereo Mix muted or disabled | Open Windows Volume Mixer and set Stereo Mix volume above 50% |
+| `Error 410` | API key expired or endpoint changed | Generate a new key at [assemblyai.com](https://www.assemblyai.com) |
+| DeepL `Too many requests` | Translating every partial word | Only translate on `end_of_turn` — already handled in current code |
 
+---
 
+## Architecture Notes
 
-## Notes / Lessons Learned
+### Why FFmpeg instead of `node-record-lpcm16`?
+The library abstracts FFmpeg/SoX in a way that makes Windows-specific failures nearly impossible to debug. FFmpeg lets you specify the exact device name via `-i "audio=..."`, making it deterministic across machines.
 
-1. The "black box" problem with libraries
-You started by trying `node-record-lpcm16`. The issue with this library is that it tries to hide FFmpeg/SoX complexity from you, but when something goes wrong (like missing a default device on Windows), it doesn't provide the tools to debug. You got stuck with `sox FAIL` errors without realizing the culprit wasn't the Node.js code—it was missing driver permissions or configuration on Windows.
+### Why the `isReady` flag?
+FFmpeg starts sending audio immediately. Without a guard, bytes arrive before AssemblyAI's WebSocket is open — causing silent drops or crashes. The flag syncs the two async processes.
 
-2. DirectShow instability (dshow)
-You went through the nightmare of audio capture on Windows. The operating system treats audio as private and protected.
+### Why translate only on `end_of_turn`?
+AssemblyAI emits partial transcripts on every detected word. Calling DeepL on each partial triggers rate limiting instantly. Waiting for the full sentence gives one API call per utterance and eliminates duplicate translations on the overlay.
 
-The challenge: understand that Windows doesn't allow any process to "grab" the audio from your sound card. You had to learn how to identify the device via `ffmpeg -list_devices`, which requires system administration knowledge—not just programming.
+---
 
-3. Async handshake fragility (asynchronous connections)
-You suffered from "Socket is not open" and 410 (Gone) errors. This happened because audio is continuous (FFmpeg sends bytes all the time), but the AssemblyAI API connection needs an exact moment to "open the door".
+## Tech Stack
 
-The difficulty: synchronizing the raw audio data stream with WebSocket opening. You had to learn buffering and connection state (`isReady`), ensuring audio wasn't "wasted" while the API wasn't ready yet.
-
-4. API evolution / obsolescence
-You were hit by error 410, a cruel obstacle: you were doing everything right in the code, but the endpoint you used in the old documentation simply no longer existed. This is a real challenge in the LLM/AI space in 2026: APIs evolve at a speed that documentation and internet tutorials can't keep up with.
-
-
-
-
-
-
-
-
-
-
-
-Prerequisites (Windows):
-
-1. Visual Studio Build Tools (C++ compiler)
-Download: https://visualstudio.microsoft.com/visual-cpp-build-tools/
-During installation, select: "Desktop development with C++"
-
-2. CMake
-Download: https://cmake.org/download/
-Enable: "Add CMake to system PATH" during installation
-
-3. Python (if needed)
-Download: https://python.org
-
+- [AssemblyAI](https://www.assemblyai.com) — Streaming speech-to-text
+- [DeepL](https://www.deepl.com) — Neural machine translation  
+- [Electron](https://www.electronjs.org) — Transparent overlay window
+- [FFmpeg](https://ffmpeg.org) — Low-level audio capture via DirectShow
