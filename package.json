@@ -4,7 +4,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "node main.js",
+    "dev": "electron main.js ",
+    "devtest": "node main.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,6 +15,7 @@
   "dependencies": {
     "assemblyai": "^4.26.1",
     "deepl-node": "^1.24.0",
-    "dotenv": "^17.3.1"
+    "dotenv": "^17.3.1",
+    "electron": "^41.0.2"
   }
 }

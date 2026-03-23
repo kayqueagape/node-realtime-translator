@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e2e;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+      height: 100vh;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #cdd6f4;
+    }
+
+    .lista {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      max-height: 380px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px 16px;
+      background: #313244;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+
+    button:hover {
+      background: #89b4fa;
+      color: #1e1e2e;
+    }
+  </style>
+</head>
+<body>
+  <h2> Choose target language</h2>
+  <div class="lista" id="list"></div>
+
+  <script>
+    const { ipcRenderer } = require("electron");
+
+    const LANGUAGES = [
+      { code: "PT-BR", name: "Portuguese (Brazil)" },
+      { code: "PT-PT", name: "Portuguese (Portugal)" },
+      { code: "EN-US", name: "English (US)" },
+      { code: "EN-GB", name: "English (UK)" },
+      { code: "ES", name: "Spanish" },
+      { code: "FR", name: "French" },
+      { code: "DE", name: "German" },
+      { code: "IT", name: "Italian" },
+      { code: "JA", name: "Japanese" },
+      { code: "ZH", name: "Chinese" },
+      { code: "RU", name: "Russian" },
+      { code: "KO", name: "Korean" },
+    ];
+
+    const lista = document.getElementById("list");
+
+    LANGUAGES.forEach((language) => {
+      const btn = document.createElement("button");
+      btn.textContent = language.name;
+      btn.onclick = () => ipcRenderer.send("target-language-selected", language);
+      lista.appendChild(btn);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: transparent;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #caption {
+      color: white;
+      font-size: 22px;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      background: rgba(0, 0, 0, 0.78);
+      border-radius: 12px;
+      padding: 8px 24px;
+      text-align: center;
+      max-width: 860px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: grab;
+    }
+
+    #caption:active { cursor: grabbing; }
+  </style>
+</head>
+<body>
+  <div id="caption">Waiting for transcription...</div>
+
+  <script>
+    const { ipcRenderer } = require("electron");
+
+    ipcRenderer.on("caption", (_, text) => {
+      document.getElementById("caption").textContent = text;
+    });
+
+    const el = document.getElementById("caption");
+    let dragging = false;
+    let startX = 0, startY = 0;
+    let winX = 0, winY = 0;
+
+    el.addEventListener("mousedown", (e) => {
+      dragging = true;
+      startX = e.screenX;
+      startY = e.screenY;
+      winX = window.screenX;
+      winY = window.screenY;
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const dx = e.screenX - startX;
+      const dy = e.screenY - startY;
+      ipcRenderer.send("overlay-drag", { x: winX + dx, y: winY + dy });
+    });
+
+    window.addEventListener("mouseup", () => { dragging = false; });
+  </script>
+</body>
+</html>

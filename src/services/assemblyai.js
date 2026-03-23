@@ -1,14 +1,14 @@
 import { AssemblyAI } from "assemblyai";
-import { spawn }      from "child_process";
-import { translate }   from "./deepl.js";
+import { spawn } from "child_process";
 import "dotenv/config";
+import { translate } from "./deepl.js";
+import { updateCaption } from "./overlay.js";
 
-export async function startTranscription(lingua) {
+export async function startTranscription(targetLanguage) {
   const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
 
   const transcriber = client.streaming.transcriber({
     sampleRate: 16000,
-    //models: u3-rt-pro, universal-streaming-english, universal-streaming-multilingual, whisper-rt;
     speechModel: "universal-streaming-english",
     format_turns: false,
     end_of_turn_confidence_threshold: 0.4,
@@ -34,36 +34,37 @@ export async function startTranscription(lingua) {
 
     process.stdout.write(`\r ${turn.transcript.padEnd(100)}`);
 
-    const traducao = await translate(turn.transcript, lingua.codigo);
-    process.stdout.write(`\n${traducao.padEnd(100)}\x1b[1A`); // turn 1 line
+    const translation = await translate(turn.transcript, targetLanguage.code);
+    updateCaption(translation);
+    process.stdout.write(`\n${translation.padEnd(100)}\x1b[1A`);
 
-    // break a line and reset
     if (turn.end_of_turn) {
       process.stdout.write("\n\n");
     }
   });
 
+  transcriber.on("error", (error) => console.error("AssemblyAI error:", error));
 
-  transcriber.on("error", (error) => console.error("Erro AssemblyAI:", error));
+  const ffmpegAudioDevice = process.env.FFMPEG_AUDIO_DEVICE || "audio=Mixagem estéreo (Realtek High Definition Audio)";
 
   const ffmpeg = spawn("ffmpeg", [
     "-f", "dshow",
-    "-i", "audio=Mixagem estéreo (Realtek High Definition Audio)",
+    "-i", ffmpegAudioDevice,
     "-ar", "16000",
     "-ac", "1",
     "-f", "s16le",
-    "-",
+    "-"
   ]);
 
   ffmpeg.stdout.on("data", (data) => {
     if (isReady) transcriber.sendAudio(data);
   });
 
-  console.log(" Connecting to AssemblyAI...");
+  console.log("Connecting to AssemblyAI...");
   transcriber.connect();
 
   process.on("SIGINT", async () => {
-    console.log("\n Closing...");
+    console.log("\nClosing...");
     ffmpeg.kill();
     await transcriber.close();
     process.exit();
