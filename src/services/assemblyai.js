@@ -4,6 +4,14 @@ import "dotenv/config";
 import { translate } from "./deepl.js";
 import { updateCaption } from "./overlay.js";
 
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
 export async function startTranscription(targetLanguage) {
   const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
 
@@ -29,17 +37,25 @@ export async function startTranscription(targetLanguage) {
     isReady = true;
   });
 
+  const debouncedTranslate = debounce(async (text) => {
+    const translation = await translate(text, targetLanguage.code);
+    updateCaption(translation);
+    process.stdout.write(`\n${translation.padEnd(100)}\x1b[1A`);
+  }, 100);
+
   transcriber.on("turn", async (turn) => {
     if (!turn.transcript) return;
 
     process.stdout.write(`\r ${turn.transcript.padEnd(100)}`);
 
-    const translation = await translate(turn.transcript, targetLanguage.code);
-    updateCaption(translation);
-    process.stdout.write(`\n${translation.padEnd(100)}\x1b[1A`);
-
     if (turn.end_of_turn) {
+      debouncedTranslate.cancel?.();
+      const translation = await translate(turn.transcript, targetLanguage.code);
+      updateCaption(translation);
+      process.stdout.write(`\n${translation.padEnd(100)}\x1b[1A`);
       process.stdout.write("\n\n");
+    } else {
+      debouncedTranslate(turn.transcript);
     }
   });
 
