@@ -26,23 +26,88 @@
       padding: 8px 24px;
       text-align: center;
       max-width: 860px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       cursor: grab;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
     #caption:active { cursor: grabbing; }
+
+    #line-prev {
+      font-size: 19px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.3s ease;
+    }
+
+    #line-prev.visible {
+      max-height: 2em;
+      opacity: 1;
+    }
+
+    #line-curr {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: opacity 0.5s ease;
+    }
+
+    #caption.fading #line-prev,
+    #caption.fading #line-curr {
+      opacity: 0;
+    }
   </style>
 </head>
 <body>
-  <div id="caption">Waiting for transcription...</div>
+  <div id="caption">
+    <div id="line-prev"></div>
+    <div id="line-curr">Waiting for transcription...</div>
+  </div>
 
   <script>
     const { ipcRenderer } = require("electron");
 
+    const caption  = document.getElementById("caption");
+    const linePrev = document.getElementById("line-prev");
+    const lineCurr = document.getElementById("line-curr");
+
+    const CLEAR_DELAY = 10000;
+    let clearTimer = null;
+
+    function resetClearTimer() {
+      clearTimeout(clearTimer);
+      caption.classList.remove("fading");
+
+      clearTimer = setTimeout(() => {
+        caption.classList.add("fading");
+
+        // Após o fade, limpa o texto
+        setTimeout(() => {
+          linePrev.textContent = "";
+          linePrev.classList.remove("visible");
+          lineCurr.textContent = "";
+          caption.classList.remove("fading");
+        }, 500);
+      }, CLEAR_DELAY);
+    }
+
     ipcRenderer.on("caption", (_, text) => {
-      document.getElementById("caption").textContent = text;
+      const prev = lineCurr.textContent;
+
+      if (prev && prev !== "Waiting for transcription...") {
+        linePrev.textContent = prev;
+        linePrev.classList.add("visible");
+      } else {
+        linePrev.textContent = "";
+        linePrev.classList.remove("visible");
+      }
+
+      lineCurr.textContent = text;
+      resetClearTimer();
     });
 
     const el = document.getElementById("caption");
