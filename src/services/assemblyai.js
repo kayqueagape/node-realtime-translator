@@ -6,10 +6,12 @@ import { updateCaption } from "./overlay.js";
 
 function debounce(fn, delay) {
   let timer;
-  return (...args) => {
+  const debounced = (...args) => {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), delay);
   };
+  debounced.cancel = () => clearTimeout(timer);
+  return debounced;
 }
 
 export async function startTranscription(targetLanguage) {
@@ -31,17 +33,22 @@ export async function startTranscription(targetLanguage) {
   });
 
   let isReady = false;
+  let lastTranslatedText = "";
 
   transcriber.on("open", ({ id }) => {
     console.log(`AssemblyAI Open Session | ID: ${id}`);
     isReady = true;
   });
 
-  const debouncedTranslate = debounce(async (text) => {
+  async function translateAndShow(text) {
+    if (text === lastTranslatedText) return;
+    lastTranslatedText = text;
     const translation = await translate(text, targetLanguage.code);
     updateCaption(translation);
     process.stdout.write(`\n${translation.padEnd(100)}\x1b[1A`);
-  }, 100);
+  }
+
+  const debouncedTranslate = debounce(translateAndShow, 600);
 
   transcriber.on("turn", async (turn) => {
     if (!turn.transcript) return;
@@ -49,10 +56,8 @@ export async function startTranscription(targetLanguage) {
     process.stdout.write(`\r ${turn.transcript.padEnd(100)}`);
 
     if (turn.end_of_turn) {
-      debouncedTranslate.cancel?.();
-      const translation = await translate(turn.transcript, targetLanguage.code);
-      updateCaption(translation);
-      process.stdout.write(`\n${translation.padEnd(100)}\x1b[1A`);
+      debouncedTranslate.cancel();
+      await translateAndShow(turn.transcript);
       process.stdout.write("\n\n");
     } else {
       debouncedTranslate(turn.transcript);
