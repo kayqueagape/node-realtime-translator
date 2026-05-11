@@ -43,6 +43,10 @@ Create a `.env` file at the root:
 ASSEMBLYAI_API_KEY=your_key_here
 DEEPL_API_KEY=your_key_here
 FFMPEG_AUDIO_DEVICE=audio=Stereo Mix (Realtek High Definition Audio)
+
+HOTKEY_STOP= shortcut
+HOTKEY_PAUSE= shortcut
+
 ```
 
 ---
