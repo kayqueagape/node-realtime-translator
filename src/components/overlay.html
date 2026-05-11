@@ -56,26 +56,62 @@
       text-overflow: ellipsis;
     }
 
-    #caption.fading {
+    #caption.fading { opacity: 0; }
+
+    #pause-badge {
+      position: fixed;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(220, 80, 20, 0.9);
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      padding: 3px 12px;
+      border-radius: 6px;
+      pointer-events: none;
       opacity: 0;
+      transition: opacity 0.3s ease;
     }
+
+    #pause-badge.visible { opacity: 1; }
+
+    #shortcut-hint {
+      position: fixed;
+      bottom: 4px;
+      right: 10px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.45);
+      font-family: Arial, sans-serif;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+    }
+
+    #shortcut-hint.hidden { opacity: 0; }
   </style>
 </head>
 <body>
+  <div id="pause-badge">⏸ PAUSADO</div>
+
   <div id="caption">
     <div id="line-prev"></div>
     <div id="line-curr">Waiting for transcription...</div>
   </div>
 
+  <div id="shortcut-hint"></div>
+
   <script>
     const { ipcRenderer } = require("electron");
 
-    const caption  = document.getElementById("caption");
-    const linePrev = document.getElementById("line-prev");
-    const lineCurr = document.getElementById("line-curr");
+    const caption   = document.getElementById("caption");
+    const linePrev  = document.getElementById("line-prev");
+    const lineCurr  = document.getElementById("line-curr");
+    const pauseBadge = document.getElementById("pause-badge");
+    const hint      = document.getElementById("shortcut-hint");
 
     const CLEAR_DELAY    = 4000;
-    const MIN_CHARS_PUSH = 60;  
+    const MIN_CHARS_PUSH = 60;
 
     let clearTimer = null;
     let currBuffer = "";
@@ -109,6 +145,16 @@
 
       lineCurr.textContent = currBuffer;
       resetClearTimer();
+    });
+
+    ipcRenderer.on("pause-state", (_, paused) => {
+      pauseBadge.classList.toggle("visible", paused);
+    });
+
+    ipcRenderer.on("hotkey-hints", (_, { stop, pause }) => {
+      hint.textContent = `${pause} pausar/retomar  ·  ${stop} encerrar`;
+      hint.classList.remove("hidden");
+      setTimeout(() => hint.classList.add("hidden"), 6000);
     });
 
     const el = document.getElementById("caption");

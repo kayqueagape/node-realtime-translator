@@ -1,4 +1,3 @@
-
 import electron from "electron";
 const { BrowserWindow, ipcMain, screen } = electron;
 
@@ -8,6 +7,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let win = null;
+let pendingHints = null;
 
 export function createOverlay() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -35,6 +35,7 @@ export function createOverlay() {
 
   win.webContents.once("did-finish-load", () => {
     console.log("Overlay created!");
+    if (pendingHints) win.webContents.send("hotkey-hints", pendingHints);
   });
 
   ipcMain.on("overlay-drag", (_, { x, y }) => {
@@ -45,5 +46,18 @@ export function createOverlay() {
 export function updateCaption(text) {
   if (win && !win.isDestroyed()) {
     win.webContents.send("caption", text);
+  }
+}
+
+export function updatePauseState(paused) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("pause-state", paused);
+  }
+}
+
+export function sendHotkeyHints(stop, pause) {
+  pendingHints = { stop, pause };
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("hotkey-hints", pendingHints);
   }
 }

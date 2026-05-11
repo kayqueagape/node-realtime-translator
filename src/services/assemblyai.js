@@ -14,10 +14,30 @@ function debounce(fn, delay) {
   return debounced;
 }
 
+let ffmpegProcess = null;
+let transcriberInstance = null;
+let isPaused = false;
+
+export function togglePause() {
+  isPaused = !isPaused;
+  return isPaused;
+}
+
+export async function stopTranscription() {
+  if (ffmpegProcess) {
+    ffmpegProcess.kill();
+    ffmpegProcess = null;
+  }
+  if (transcriberInstance) {
+    await transcriberInstance.close().catch(() => {});
+    transcriberInstance = null;
+  }
+}
+
 export async function startTranscription(targetLanguage) {
   const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
 
-  const transcriber = client.streaming.transcriber({
+  transcriberInstance = client.streaming.transcriber({
     sampleRate: 16000,
     speechModel: "u3-rt-pro",
     format_turns: false,
@@ -29,13 +49,13 @@ export async function startTranscription(targetLanguage) {
     prompt: "",
     speaker_labels: false,
     language_detection: false,
-    u3_rt_pro_vad_threshold: 0.5
+    u3_rt_pro_vad_threshold: 0.5,
   });
 
   let isReady = false;
   let lastTranslatedText = "";
 
-  transcriber.on("open", ({ id }) => {
+  transcriberInstance.on("open", ({ id }) => {
     console.log(`AssemblyAI Open Session | ID: ${id}`);
     isReady = true;
   });
@@ -50,7 +70,7 @@ export async function startTranscription(targetLanguage) {
 
   const debouncedTranslate = debounce(translateAndShow, 600);
 
-  transcriber.on("turn", async (turn) => {
+  transcriberInstance.on("turn", async (turn) => {
     if (!turn.transcript) return;
 
     process.stdout.write(`\r ${turn.transcript.padEnd(100)}`);
@@ -64,30 +84,24 @@ export async function startTranscription(targetLanguage) {
     }
   });
 
-  transcriber.on("error", (error) => console.error("AssemblyAI error:", error));
+  transcriberInstance.on("error", (error) => console.error("AssemblyAI error:", error));
 
-  const ffmpegAudioDevice = process.env.FFMPEG_AUDIO_DEVICE || "audio=Mixagem estéreo (Realtek High Definition Audio)";
+  const ffmpegAudioDevice =
+    process.env.FFMPEG_AUDIO_DEVICE || "audio=Mixagem estéreo (Realtek High Definition Audio)";
 
-  const ffmpeg = spawn("ffmpeg", [
+  ffmpegProcess = spawn("ffmpeg", [
     "-f", "dshow",
     "-i", ffmpegAudioDevice,
     "-ar", "16000",
     "-ac", "1",
     "-f", "s16le",
-    "-"
+    "-",
   ]);
 
-  ffmpeg.stdout.on("data", (data) => {
-    if (isReady) transcriber.sendAudio(data);
+  ffmpegProcess.stdout.on("data", (data) => {
+    if (isReady && !isPaused) transcriberInstance.sendAudio(data);
   });
 
   console.log("Connecting to AssemblyAI...");
-  transcriber.connect();
-
-  process.on("SIGINT", async () => {
-    console.log("\nClosing...");
-    ffmpeg.kill();
-    await transcriber.close();
-    process.exit();
-  });
+  transcriberInstance.connect();
 }
